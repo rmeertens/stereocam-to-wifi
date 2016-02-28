@@ -77,7 +77,7 @@ IPAddress broadcastIP(192,168,255,255);
 void setup() {
   delay(1000);
     // Open udp socket
-  udp_socket_create(&video_sock, STRINGIFY(VIEWVIDEO_HOST), VIEWVIDEO_PORT_OUT, -1, VIEWVIDEO_BROADCAST);
+  //udp_socket_create(&video_sock, STRINGIFY(VIEWVIDEO_HOST), VIEWVIDEO_PORT_OUT, -1, VIEWVIDEO_BROADCAST);
 
 
     insert_loc = 0;
