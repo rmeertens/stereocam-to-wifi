@@ -3,14 +3,14 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include "stereoprotocol.h"
-#include "time.h"
+//#include "time.h"
 /* Set these to your desired credentials. */
 const char *ssid = "MyAndroidPhone";
 const char *password = "1234567890";
 
 #define PPRZ_STX 0x99
 #ifndef STEREO_BUF_SIZE
-#define STEREO_BUF_SIZE 4*64
+#define STEREO_BUF_SIZE 250*30
 #endif
 
 
@@ -26,26 +26,14 @@ uint16_t insert_loc, extract_loc, msg_start;   // place holders for buffer read 
 
 
 typedef struct {
-  uint8_t len;
+  uint16_t len;
   uint8_t *data;
   uint8_t fresh;
-  uint8_t matrix_width;
-  uint8_t matrix_height;
+  uint16_t matrix_width;
+  uint16_t matrix_height;
 } uint8array;
 
-extern uint8array stereocam_data;
-
-
-extern uint8array stereocam_data;
-
-
-
-
-
-
-
-
-
+uint8array stereocam_data; //= {.len = 0, .data = msg_buf, .data_new = 0, .height = 0}; // buffer used to contain image without line endings
 
 
 
@@ -77,122 +65,6 @@ struct point_t {
 };
 
 
-
-/**
- * Create a new image
- * @param[out] *img The output image
- * @param[in] width The width of the image
- * @param[in] height The height of the image
- * @param[in] type The type of image (YUV422 or grayscale)
- */
-void image_create(struct image_t *img, uint16_t width, uint16_t height)
-{
-  // Set the variables
-//  img->type = type;
-  img->w = width;
-  img->h = height;
-
-  // Depending on the type the size differs
-//  if (type == IMAGE_YUV422) {
-    img->buf_size = sizeof(uint8_t) * 2 * width * height;
- /* } else if (type == IMAGE_JPEG) {
-    img->buf_size = sizeof(uint8_t) * 2 * width * height;  // At maximum quality this is enough
-  } else if (type == IMAGE_GRADIENT) {
-    img->buf_size = sizeof(int16_t) * width * height;
-  } else {
-    img->buf_size = sizeof(uint8_t) * width * height;
-  }*/
-
-  img->buf = malloc(img->buf_size);
-}
-
-/**
- * Free the image
- * @param[in] *img The image to free
- */
-void image_free(struct image_t *img)
-{
-  if (img->buf != NULL) {
-    free(img->buf);
-    img->buf = NULL;
-  }
-}
-
-
-
-void image_from_grayscale(struct image_t *input_grayscale, struct image_t *output_yuv422){
-  uint8_t *source = (uint8_t*)input_grayscale->buf;
-  uint8_t *dest = (uint8_t*)output_yuv422->buf;
-  source++;
-
-  // Copy the creation timestamp (stays the same)
-//  memcpy(&output_yuv422->ts, &input_grayscale->ts, sizeof(struct timeval));
-
-  // Copy the pixels
-  for (int y = 0; y < output_yuv422->h; y++) {
-  for (int x = 0; x < output_yuv422->w; x++) {
-    if (output_yuv422->type == IMAGE_YUV422) {
-    *dest++ = 127;  // U / V
-    }
-    *dest++ = *source;    // Y
-    source += 1;
-  }
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  uint8array stereocam_data; //= {.len = 0, .data = msg_buf, .data_new = 0, .height = 0}; // buffer used to contain image without line endings
-
-/* PPRZ message parser states */
-enum normal_parser_states {
-  SearchingPPRZ_STX,
-  ParsingLength,
-  ParsingSenderId,
-  ParsingMsgId,
-  ParsingMsgPayload,
-  CheckingCRCA,
-  CheckingCRCB
-};
-
-struct normal_parser_t {
-  enum normal_parser_states state;
-  unsigned char length;
-  int counter;
-  unsigned char sender_id;
-  unsigned char msg_id;
-  unsigned char payload[100];
-  unsigned char crc_a;
-  unsigned char crc_b;
-};
-
-struct normal_parser_t parser;
-
 char packetBuffer[255]; //buffer to hold incoming packet
 char outBuffer[1255];    //buffer to hold outgoing data
 uint16_t out_idx = 0;
@@ -204,13 +76,10 @@ WiFiUDP udp;
 IPAddress myIP;
 IPAddress broadcastIP(192,168,255,255);
 
-struct image_t coloredImage;
 void setup() {
   delay(1000);
     // Open udp socket
   //udp_socket_create(&video_sock, STRINGIFY(VIEWVIDEO_HOST), VIEWVIDEO_PORT_OUT, -1, VIEWVIDEO_BROADCAST);
-  
-  image_create(&coloredImage, 256,96);
   
     insert_loc = 0;
   extract_loc = 0;
@@ -220,9 +89,9 @@ void setup() {
   stereocam_data.fresh = 0;
   stereocam_data.matrix_width = 0;
   stereocam_data.matrix_height = 0;
-  Serial.begin(921600);
+  Serial.begin(115200);
   Serial.println();
-  Serial.print("Connnecting to ");
+  Serial.println("Connnecting to ");
   Serial.println(ssid);
   ArduinoOTA.onStart([]() {
     Serial.println("Start");
@@ -251,13 +120,13 @@ void setup() {
   
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    //Serial.print(".");
+    Serial.print(".");
   }
   myIP = WiFi.localIP();
 #endif
   Serial.println(myIP);
   MDNS.begin("roland");
-  udp.begin(localPort);
+//  udp.begin(localPort);
 }
 
 /*
@@ -277,6 +146,7 @@ void setup() {
  * @param[in] quality_code The JPEG encoding quality
  * @param[in] has_dri_header Whether we have an DRI header or not
  */
+ 
 static void rtp_packet_send(
   WiFiUDP myudp,
   uint8_t *Jpeg, int JpegLen,
@@ -356,31 +226,25 @@ static void rtp_packet_send(
   // append the JPEG scan data to the RTP buffer
   memcpy(&RtpBuf[20], Jpeg, JpegLen);
 
-  //udp_socket_send_dontwait(udp, RtpBuf, RtpPacketSize);
   myudp.beginPacketMulticast(broadcastIP, 5000, myIP);
   myudp.write(RtpBuf, RtpPacketSize);
   myudp.endPacket();
+  delay(10);
 };
 
-/**
- * Send an RTP frame
- * @param[in] *udp The UDP connection to send the frame over
- * @param[in] *img The image to send over the RTP connection
- * @param[in] format_code 0 for YUV422 and 1 for YUV421
- * @param[in] quality_code The JPEG encoding quality
- * @param[in] has_dri_header Whether we have an DRI header or not
- * @param[in] delta_t Time between images (if set to 0 or less it is calculated)
- */
+
 void rtp_frame_send(WiFiUDP myudp, struct image_t *img, uint8_t format_code,
                     uint8_t quality_code, uint8_t has_dri_header, uint32_t delta_t)
 {
   static uint32_t packetcounter = 0;
-  static uint32_t timecounter = 0;
+  unsigned long timeasdf = millis();
+  static uint32_t timecounter = 0;//micros();//nu;
+  timecounter=timeasdf;
   uint32_t offset = 0;
   uint32_t jpeg_size = img->buf_size;
   uint8_t *jpeg_ptr = (uint8_t*)img->buf;
 
-#define MAX_PACKET_SIZE 1400
+#define MAX_PACKET_SIZE 512
 /*
   if (delta_t <= 0) {
     //struct timeval tv;
@@ -388,10 +252,17 @@ void rtp_frame_send(WiFiUDP myudp, struct image_t *img, uint8_t format_code,
     uint32_t t = (tv.tv_sec % (256 * 256)) * 90000 + tv.tv_usec * 9 / 100;
     timecounter = t;
   }*/
-    timecounter = 0;
+//    timecounter = 0;
 
   // Split frame into packets
   for (; jpeg_size > 0;) {
+
+    Serial.println("PacketCounter");
+    Serial.println(packetcounter);
+  
+    Serial.println("jpeg size");
+    Serial.println(jpeg_size);
+  
     uint32_t len = MAX_PACKET_SIZE;
     uint8_t lastpacket = 0;
 
@@ -424,20 +295,36 @@ void loop() {
   /* Put all serial in_bytes in a buffer */
   while(Serial.available() > 0) {
     unsigned char inbyte = Serial.read();
-    udp.beginPacketMulticast(broadcastIP, 5000, myIP);
-      udp.write("hello", 3);
-      udp.endPacket();
+//    udp.beginPacketMulticast(broadcastIP, 5000, myIP);
+//    udp.write("hello", 3);
+//    udp.endPacket();
+      
     if (parse_single_byte(inbyte)) { // if complete message detected
+      Serial.println("Done");
+      Serial.println("Length: ");
+      Serial.println(stereocam_data.len);
+      Serial.println("width: ");
+      Serial.println(stereocam_data.matrix_width);
+      Serial.println("height: ");
+      Serial.println(stereocam_data.matrix_height);
+//
+//      udp.beginPacketMulticast(broadcastIP, 5000, myIP);
+//      udp.write(stereocam_data.data, stereocam_data.len);
+//      udp.endPacket();
+//       
     struct image_t grayscaleImage; 
 
-    grayscaleImage.type=IMAGE_GRAYSCALE; 
-    grayscaleImage.w=256;
-    grayscaleImage.h=96;
-    grayscaleImage.buf=outBuffer;
-       
-    image_from_grayscale(&grayscaleImage, &coloredImage);
+    grayscaleImage.type=IMAGE_YUV422; 
+    grayscaleImage.w=stereocam_data.matrix_width/2;
+    grayscaleImage.h=stereocam_data.matrix_height;
+    grayscaleImage.buf=stereocam_data.data;
+    grayscaleImage.buf_size=stereocam_data.len;
     
-    rtp_frame_send(udp, &coloredImage,   0,                        // Format 422
+//    udp.beginPacketMulticast(broadcastIP, 5000, myIP);
+//    udp.write((uint8_t*)grayscaleImage.buf, 30);
+//    udp.endPacket();
+//    
+    rtp_frame_send(udp, &grayscaleImage,   0,                        // Format 422
         VIEWVIDEO_QUALITY_FACTOR, // Jpeg-Quality
         0,                        // DRI Header
         VIEWVIDEO_RTP_TIME_INC    // 90kHz time increment
@@ -447,22 +334,8 @@ void loop() {
       out_idx=0;
     }
   }
-//  udp.beginPacketMulticast(broadcastIP, 4242, myIP);
-//  char test[] = "A";
-//  udp.write(test, 1);
-//  udp.endPacket();
   delay(10);
 }
-
-enum parser_state_t{
-  first,
-  second,
-  third,
-  fourth,
-  counting,
-} parser_state = first;
-
-uint16_t linecounter = 0;
 
 uint8_t parse_single_byte(unsigned char in_byte)
 {  
@@ -470,51 +343,5 @@ uint8_t parse_single_byte(unsigned char in_byte)
                             &stereocam_data.fresh, &stereocam_data.len, &stereocam_data.matrix_width, &stereocam_data.matrix_height)) {
     return 1;  
   }
-/*//  switch(parser_state) {
-//    case first:
-//      out_idx = 0;
-//      if (in_byte == 0xFF) parser_state = second;
-//      break;
-//
-//    case second:
-//      if (in_byte == 0x00) {
-//        parser_state = third;
-//      }
-//      else {
-//        parser_state = first;
-//      }
-//      break;
-//      
-//    case third:
-//      if (in_byte == 0x00) {
-//        parser_state = fourth;
-//      }
-//      else {
-//        parser_state = first;
-//      }
-//      break;
-//
-//    case fourth:
-//      if (in_byte == 0x80) {
-//        parser_state = counting;
-//      }
-//      else {
-//        parser_state = first;
-//      }
-//      break;
-//    case counting:
-//      break;
-//        
-//  }
-  
-  outBuffer[out_idx++] = in_byte;
-  if(out_idx>265){
-    outBuffer[out_idx-4] = 255;
-    outBuffer[out_idx-3] = 0;
-    outBuffer[out_idx-2] = 0;
-    outBuffer[out_idx-1] = 0xDA;
-    parser_state = first;
-    return 1;
-  }*/
   return 0;
 }
