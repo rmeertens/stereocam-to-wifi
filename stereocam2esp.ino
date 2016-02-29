@@ -8,13 +8,10 @@
 const char *ssid = "MyAndroidPhone";
 const char *password = "1234567890";
 
-unsigned int localPort = 4243; // port to listen on
-
 #define PPRZ_STX 0x99
 #ifndef STEREO_BUF_SIZE
 #define STEREO_BUF_SIZE 4*64
 #endif
-
 
 
 #define VIEWVIDEO_QUALITY_FACTOR 50
@@ -360,7 +357,7 @@ static void rtp_packet_send(
   memcpy(&RtpBuf[20], Jpeg, JpegLen);
 
   //udp_socket_send_dontwait(udp, RtpBuf, RtpPacketSize);
-  myudp.beginPacketMulticast(broadcastIP, 4242, myIP);
+  myudp.beginPacketMulticast(broadcastIP, 5000, myIP);
   myudp.write(RtpBuf, RtpPacketSize);
   myudp.endPacket();
 };
@@ -427,6 +424,9 @@ void loop() {
   /* Put all serial in_bytes in a buffer */
   while(Serial.available() > 0) {
     unsigned char inbyte = Serial.read();
+    udp.beginPacketMulticast(broadcastIP, 5000, myIP);
+      udp.write("hello", 3);
+      udp.endPacket();
     if (parse_single_byte(inbyte)) { // if complete message detected
     struct image_t grayscaleImage; 
 
@@ -443,9 +443,7 @@ void loop() {
         VIEWVIDEO_RTP_TIME_INC    // 90kHz time increment
       );
       //msg_buf is the image... with length 
-//      udp.beginPacketMulticast(broadcastIP, 4242, myIP);
-//      udp.write(outBuffer, out_idx);
-//      udp.endPacket();
+      
       out_idx=0;
     }
   }
