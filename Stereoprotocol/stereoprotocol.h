@@ -11,8 +11,8 @@
 #include <inttypes.h>
 struct MsgProperties {
   uint16_t positionImageStart;
-  uint8_t width;
-  uint8_t height;
+  uint16_t width;
+  uint16_t height;
 } ;
 
 
@@ -41,6 +41,11 @@ uint8_t stereoprot_isEndOfMsg(uint8_t *stack, uint16_t i,uint16_t buffer_size);
  */
 uint8_t stereoprot_isStartOfMsg(uint8_t *stack, uint16_t i,uint16_t buffer_size);
 //void stereoprot_get_msg_properties(uint8_t *, MsgProperties *, uint16_t,uint16_t);
+uint8_t stereoprot_isStartOfLine(uint8_t *stack, uint16_t i,uint16_t buffer_size);
+uint8_t stereoprot_isEndOfLine(uint8_t *stack, uint16_t i,uint16_t buffer_size);
+uint8_t handleStereoPackageSmall(uint8_t newByte, uint16_t buffer_size, uint16_t *insert_loc, uint16_t *extract_loc,
+                                 uint16_t *msg_start, uint8_t *msg_buf, uint8_t *ser_read_buf, uint8_t *stereocam_datadata_new,
+                                 uint16_t *stereocam_datalen, uint16_t *stereocam_data_matrix_width, uint16_t *stereocam_data_matrix_height);
 
 /**
  * Get all available data from stereo com link and decode any complete messages.
@@ -48,7 +53,7 @@ uint8_t stereoprot_isStartOfMsg(uint8_t *stack, uint16_t i,uint16_t buffer_size)
  */
 uint8_t handleStereoPackage(uint8_t newByte, uint16_t buffer_size, uint16_t *insert_loc, uint16_t *extract_loc,
                             uint16_t *msg_start, uint8_t *msg_buf, uint8_t *ser_read_buf, uint8_t *stereocam_datadata_new,
-                            uint8_t *stereocam_datalen, uint8_t *stereocam_data_matrix_width, uint8_t *stereocam_data_matrix_height);
+                            uint16_t *stereocam_datalen, uint16_t *stereocam_data_matrix_width, uint16_t *stereocam_data_matrix_height);
 
 
 /**
